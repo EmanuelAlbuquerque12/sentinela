@@ -17,7 +17,9 @@ Agregar e normalizar dados de múltiplas fontes oficiais brasileiras:
 - ⚡ **Busca Paralela** - Consultas simultâneas em múltiplas fontes
 - 🔄 **Dados Normalizados** - Formato JSON unificado
 - 🌐 **API REST** - Endpoints fáceis de usar
+- 🖥️ **Interface Web Moderna** - UI intuitiva com tema dark/light
 - 📚 **Ampla Cobertura** - Centenas de municípios e todos os tribunais
+- 🎯 **Iniciar com 1 Clique** - Scripts .bat (Windows) e .sh (Linux/Mac)
 
 ## 📋 Fontes de Dados Integradas
 
@@ -84,28 +86,55 @@ Agregar e normalizar dados de múltiplas fontes oficiais brasileiras:
 - **Cache**: Redis (opcional)
 - **Documentação**: OpenAPI/Swagger automático
 
-## 📦 Instalação
+## 📦 Instalação e Uso
+
+### 🎯 Método 1: Iniciar com 1 Clique (Recomendado)
+
+#### Windows
+```bash
+# Duplo clique no arquivo ou execute:
+start.bat
+```
+
+#### Linux/Mac
+```bash
+# Execute:
+./start.sh
+```
+
+O script automaticamente:
+- ✅ Verifica e instala dependências
+- ✅ Cria ambiente virtual
+- ✅ Configura arquivo .env (se necessário)
+- ✅ Inicia o servidor
+- ✅ Abre o navegador automaticamente
+
+**Acesse:** http://localhost:8000
+
+### 🔧 Método 2: Manual
 
 ```bash
-# Clonar repositório
+# 1. Clonar repositório
 git clone https://github.com/EmanuelAlbuquerque12/sentinela.git
 cd sentinela
 
-# Criar ambiente virtual
+# 2. Criar ambiente virtual
 python -m venv venv
 source venv/bin/activate  # Linux/Mac
 # ou: venv\Scripts\activate  # Windows
 
-# Instalar dependências
+# 3. Instalar dependências
 pip install -r requirements.txt
 
-# Configurar variáveis de ambiente
+# 4. Configurar variáveis de ambiente
 cp .env.example .env
-# Editar .env com suas API Keys (se necessário)
+# Editar .env com sua API Key do DataJud (opcional mas recomendado)
 
-# Executar servidor
+# 5. Executar servidor
 uvicorn app.main:app --reload
 ```
+
+**Acesse:** http://localhost:8000
 
 ## 🔑 Configuração de API Keys
 
@@ -118,6 +147,42 @@ uvicorn app.main:app --reload
 - **Querido Diário**: Sem autenticação necessária ✅
 - **TCU**: Sem autenticação necessária ✅
 - **DOU**: Dados abertos sem autenticação ✅
+
+## 🖥️ Interface Web
+
+O Sentinela inclui uma **interface web moderna e intuitiva** com:
+
+- 🎨 **Design Moderno**: UI limpa com animações suaves
+- 🌓 **Tema Dark/Light**: Alternância com persistência
+- 🔍 **Busca Avançada**: Filtros por data, UF, fonte
+- 📊 **Visualização Rica**: Cards com relevância e snippets
+- 📱 **Responsivo**: Funciona em desktop, tablet e mobile
+- ⚡ **Zero Dependências**: HTML5, CSS3, JavaScript puro
+
+### Screenshots
+
+**Página Inicial:**
+```
+┌─────────────────────────────────────────┐
+│  🔍 Sentinela                           │
+│  Busca Unificada em Diários Oficiais   │
+├─────────────────────────────────────────┤
+│  [Digite sua busca...]          [🔍]   │
+│  ▼ Filtros Avançados                   │
+├─────────────────────────────────────────┤
+│  📊 1.523 resultados | 4 fontes | 2.3s │
+├─────────────────────────────────────────┤
+│  📄 Edital de Licitação nº 2024/001    │
+│  📅 10/11/2024 | 📍 Pref. SP | 95%     │
+│  ...processo licitatório...            │
+└─────────────────────────────────────────┘
+```
+
+### Acesso
+
+- **Interface Web:** http://localhost:8000
+- **API Docs:** http://localhost:8000/docs
+- **ReDoc:** http://localhost:8000/redoc
 
 ## 🚀 Uso da API
 
@@ -146,14 +211,17 @@ GET /api/v1/search?query=licitacao&data_inicio=2024-01-01&data_fim=2024-12-31
 }
 ```
 
-### Listar Fontes Disponíveis
-```bash
-GET /api/v1/sources
-```
+### Outros Endpoints
 
-### Health Check
 ```bash
+# Listar fontes disponíveis
+GET /api/v1/sources
+
+# Health check
 GET /api/v1/health
+
+# Estatísticas
+GET /api/v1/stats?query=licitacao
 ```
 
 ## 📊 Cobertura e Limitações

@@ -5,9 +5,11 @@ FastAPI application main file
 """
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.openapi.utils import get_openapi
 import time
+from pathlib import Path
 from contextlib import asynccontextmanager
 
 from app.config import get_settings
@@ -132,12 +134,29 @@ async def global_exception_handler(request: Request, exc: Exception):
 app.include_router(search_router)
 
 
-# Rota raiz
-@app.get("/", tags=["root"])
+# Montar arquivos estáticos do frontend
+frontend_path = Path(__file__).parent.parent / "frontend"
+
+# Montar CSS e JS
+if (frontend_path / "css").exists():
+    app.mount("/css", StaticFiles(directory=str(frontend_path / "css")), name="css")
+if (frontend_path / "js").exists():
+    app.mount("/js", StaticFiles(directory=str(frontend_path / "js")), name="js")
+if (frontend_path / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=str(frontend_path / "assets")), name="assets")
+
+
+# Rota raiz - Servir interface web
+@app.get("/", include_in_schema=False)
 async def root():
     """
-    Informações básicas da API
+    Interface Web do Sentinela
     """
+    index_path = frontend_path / "index.html"
+    if index_path.exists():
+        return FileResponse(str(index_path))
+
+    # Fallback para resposta JSON se frontend não existir
     return {
         "app": "Sentinela",
         "version": settings.app_version,
