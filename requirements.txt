@@ -1,0 +1,54 @@
+# Sentinela - Busca Unificada em Diários Oficiais
+# Dependências - Python 3.10+
+
+# Framework Web
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# HTTP Client Assíncrono
+httpx==0.26.0
+aiohttp==3.9.1
+
+# Utilitários
+python-dotenv==1.0.0
+python-multipart==0.0.6
+
+# Data/Time
+python-dateutil==2.8.2
+pytz==2023.3
+
+# Validação e Parsing
+email-validator==2.1.0
+orjson==3.9.12  # JSON rápido
+
+# Cache (opcional mas recomendado)
+redis==5.0.1
+hiredis==2.3.2
+
+# Scraping (para DOU e fontes sem API)
+scrapy==2.11.0
+beautifulsoup4==4.12.3
+lxml==5.1.0
+
+# Logging e Monitoramento
+loguru==0.7.2
+
+# Segurança
+cryptography==41.0.7
+
+# Desenvolvimento
+pytest==7.4.3
+pytest-asyncio==0.23.3
+pytest-cov==4.1.0
+httpx-mock==0.12.0
+
+# Code Quality
+black==23.12.1
+ruff==0.1.11
+mypy==1.8.0
+
+# Documentação
+mkdocs==1.5.3
+mkdocs-material==9.5.3
