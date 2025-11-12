@@ -6,9 +6,13 @@ Fallback para quando INLabs não estiver disponível
 """
 import asyncio
 import json
+import re
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import List, Optional, Dict, Any
+import httpx
+from bs4 import BeautifulSoup
+
 from app.config import get_settings
 from app.models.schemas import UnifiedResult, SourceType
 from app.utils.helpers import (
@@ -123,18 +127,21 @@ class DOUScrapyService:
             print(f"✓ Cache DOU Scrapy {data} seção {secao}")
             return cached.get("content", [])
 
-        # Não está em cache - precisaria fazer scraping
-        # Por enquanto, retornar vazio (implementação futura)
-        print(f"⚠️  DOU Scrapy: data {data} seção {secao} não disponível")
+        # Não está em cache - fazer scraping
+        print(f"⏬ Downloading DOU {data} seção {secao} via scraping...")
+        artigos = await self.scrape_dou_edition(data, secao)
 
-        # TODO: Implementar scraping real usando httpx + BeautifulSoup
-        # Isso requereria:
-        # 1. Fazer request para https://www.in.gov.br/leiturajornal
-        # 2. Extrair script JSON com dados das seções
-        # 3. Parsear artigos
-        # 4. Salvar em cache
+        # Salvar em cache se conseguiu baixar
+        if artigos:
+            cache_diario(
+                source=f"dou_scrapy_secao_{secao}",
+                data=datetime.combine(data, datetime.min.time()),
+                content=artigos,
+                metadata={"total_artigos": len(artigos), "metodo": "scraping"}
+            )
+            print(f"✓ DOU scraped e cached: {len(artigos)} artigos")
 
-        return []
+        return artigos
 
     def _filter_artigos(
         self,
@@ -217,9 +224,6 @@ class DOUScrapyService:
         """
         Faz scraping de uma edição do DOU
 
-        NOTA: Implementação futura usando httpx + BeautifulSoup
-        Atualmente retorna lista vazia
-
         Args:
             data: Data da edição
             secao: Seção (1, 2, 3)
@@ -227,31 +231,141 @@ class DOUScrapyService:
         Returns:
             Lista de artigos extraídos
         """
-        # TODO: Implementar scraping real
-        # Passos:
-        # 1. Construir URL: f"{self.base_url}/leiturajornal?data={data:%d-%m-%Y}&secao=dou{secao}"
-        # 2. Fazer request com httpx
-        # 3. Parsear HTML com BeautifulSoup
-        # 4. Extrair script JSON com dados
-        # 5. Processar artigos
-        # 6. Salvar em cache
+        try:
+            # Construir URL
+            data_str = data.strftime("%d-%m-%Y")
+            url = f"{self.base_url}/leiturajornal?data={data_str}&secao=dou{secao}"
 
-        print(f"⚠️  Scraping não implementado ainda para {data} seção {secao}")
-        return []
+            print(f"🔍 Scraping DOU {data_str} seção {secao}...")
+
+            # Fazer request
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.get(url, follow_redirects=True)
+                response.raise_for_status()
+                html = response.text
+
+            # Parsear HTML
+            soup = BeautifulSoup(html, 'html.parser')
+
+            # Método 1: Extrair script JSON (similar ao projeto scrapy-diario-oficial-da-uniao)
+            artigos = []
+            scripts = soup.find_all('script', type='text/javascript')
+
+            for script in scripts:
+                if script.string and 'jsonArray' in script.string:
+                    # Tentar extrair JSON
+                    match = re.search(r'var\s+jsonArray\s*=\s*(\[.*?\]);', script.string, re.DOTALL)
+                    if match:
+                        try:
+                            json_data = json.loads(match.group(1))
+                            artigos = self._parse_json_artigos(json_data, data, secao)
+                            print(f"✓ Extraídos {len(artigos)} artigos via JSON")
+                            break
+                        except json.JSONDecodeError as e:
+                            print(f"⚠️  Erro ao parsear JSON: {e}")
+
+            # Método 2: Fallback - extrair do HTML diretamente
+            if not artigos:
+                artigos = self._parse_html_artigos(soup, data, secao)
+                if artigos:
+                    print(f"✓ Extraídos {len(artigos)} artigos via HTML")
+
+            return artigos
+
+        except Exception as e:
+            print(f"❌ Erro ao fazer scraping DOU {data} seção {secao}: {e}")
+            return []
+
+    def _parse_json_artigos(
+        self,
+        json_data: List[Dict],
+        data: date,
+        secao: str
+    ) -> List[Dict[str, Any]]:
+        """Parse artigos do JSON extraído"""
+        artigos = []
+
+        for item in json_data:
+            # Extrair campos do JSON
+            url_title = item.get('urlTitle', '')
+            titulo = item.get('title', '')
+            orgao = item.get('orgao', '')
+
+            # Construir URL do artigo
+            url_artigo = f"{self.base_url}/en/web/dou/-/{url_title}" if url_title else ""
+
+            artigo = {
+                "titulo": titulo,
+                "conteudo": "",  # Requer download do artigo específico
+                "orgao": orgao,
+                "secao": secao,
+                "pagina": item.get('pagina', ''),
+                "data_publicacao": data,
+                "url": url_artigo,
+                "data": data.strftime("%Y-%m-%d"),
+                "json_raw": item
+            }
+
+            artigos.append(artigo)
+
+        return artigos
+
+    def _parse_html_artigos(
+        self,
+        soup: BeautifulSoup,
+        data: date,
+        secao: str
+    ) -> List[Dict[str, Any]]:
+        """Parse artigos extraindo do HTML (fallback)"""
+        artigos = []
+
+        # Tentar encontrar containers de artigos
+        # A estrutura pode variar, tentando seletores comuns
+        containers = soup.find_all(['article', 'div'], class_=re.compile(r'resultado|artigo|item', re.I))
+
+        for container in containers:
+            try:
+                # Extrair título
+                titulo_tag = container.find(['h2', 'h3', 'h4', 'a'], class_=re.compile(r'titulo|title', re.I))
+                titulo = titulo_tag.get_text(strip=True) if titulo_tag else ""
+
+                # Extrair link
+                link_tag = container.find('a', href=True)
+                url = f"{self.base_url}{link_tag['href']}" if link_tag else ""
+
+                # Extrair texto/resumo
+                texto = container.get_text(strip=True, separator=' ')
+
+                if titulo or texto:
+                    artigo = {
+                        "titulo": titulo or texto[:100],
+                        "conteudo": texto,
+                        "orgao": "Órgão Federal",
+                        "secao": secao,
+                        "pagina": "",
+                        "data_publicacao": data,
+                        "url": url or self.base_url,
+                        "data": data.strftime("%Y-%m-%d")
+                    }
+                    artigos.append(artigo)
+
+            except Exception as e:
+                continue
+
+        return artigos
 
     async def health_check(self) -> Dict[str, Any]:
         """Verifica disponibilidade do serviço"""
         try:
-            import httpx
-
             async with httpx.AsyncClient(timeout=10) as client:
                 response = await client.head(f"{self.base_url}/leiturajornal")
 
                 if response.status_code < 500:
                     return {
                         "status": "online",
-                        "message": "Site acessível (scraping não implementado ainda)",
-                        "implementation": "placeholder"
+                        "message": "Site acessível - scraping funcional",
+                        "implementation": "complete",
+                        "metodos": ["JSON extraction", "HTML parsing"]
                     }
                 else:
                     return {
@@ -272,18 +386,25 @@ class DOUScrapyService:
             "descricao": "Scraping do site do DOU (fallback para INLabs)",
             "cobertura": "Todas as seções do DOU",
             "requer_autenticacao": False,
-            "status": "em desenvolvimento",
+            "status": "operacional",
             "limitacoes": [
                 "Depende da estrutura HTML do site (pode quebrar)",
-                "Scraping não totalmente implementado ainda",
-                "Mais lento que INLabs",
-                "Use INLabs como primeira opção"
+                "Mais lento que INLabs (requer scraping)",
+                "Use INLabs como primeira opção",
+                "Conteúdo completo pode não estar disponível"
             ],
             "vantagens": [
                 "Não requer autenticação",
                 "Fallback quando INLabs falha",
                 "Acesso direto ao site público",
-                "Baseado em projeto open-source testado"
+                "Baseado em projeto open-source testado",
+                "Cache de 72 horas",
+                "Duplo método: JSON + HTML parsing"
+            ],
+            "metodos": [
+                "Extração de JSON embedded no HTML",
+                "Parsing de HTML como fallback",
+                "Cache automático de resultados"
             ],
             "github_reference": "https://github.com/sinayra/scrapy-diario-oficial-da-uniao",
             "license": "GPL-3.0 (projeto original)"

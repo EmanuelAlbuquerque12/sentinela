@@ -14,6 +14,8 @@ from app.services.tcu import TCUService
 from app.services.tcu_enhanced import TCUEnhancedService
 from app.services.dou import DOUService
 from app.services.inlabs import INLabsService
+from app.services.dou_scrapy import DOUScrapyService
+from app.services.dou_dados_abertos import DOUDadosAbertosService
 from app.utils.helpers import parse_search_query
 
 
@@ -32,6 +34,8 @@ class SearchAggregator:
         self.tcu_enhanced = TCUEnhancedService()
         self.dou = DOUService()
         self.inlabs = INLabsService()
+        self.dou_scrapy = DOUScrapyService()
+        self.dou_dados_abertos = DOUDadosAbertosService()
 
         # Mapear nomes de fontes para serviços
         self.sources = {
@@ -41,6 +45,8 @@ class SearchAggregator:
             "tcu_enhanced": self.tcu_enhanced,
             "dou": self.dou,
             "inlabs": self.inlabs,
+            "dou_scrapy": self.dou_scrapy,
+            "dou_dados_abertos": self.dou_dados_abertos,
         }
 
     async def search_all(self, request: SearchRequest) -> SearchResponse:

@@ -8,6 +8,7 @@ from .tcu_enhanced import TCUEnhancedService
 from .dou import DOUService
 from .inlabs import INLabsService
 from .dou_scrapy import DOUScrapyService
+from .dou_dados_abertos import DOUDadosAbertosService
 from .aggregator import SearchAggregator
 
 __all__ = [
@@ -18,5 +19,6 @@ __all__ = [
     "DOUService",
     "INLabsService",
     "DOUScrapyService",
+    "DOUDadosAbertosService",
     "SearchAggregator",
 ]
