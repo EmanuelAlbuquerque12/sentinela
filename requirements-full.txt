@@ -18,10 +18,11 @@ email-validator
 redis
 # hiredis  # Requer C compiler
 
-# Scraping (para fontes sem API)
+# Scraping e PDF (necessários para DOU Scrapy e TCU Acórdãos)
 beautifulsoup4
-# scrapy  # Requer compilação
-# lxml     # Requer C compiler
+lxml
+pymupdf
+unidecode
 
 # Logging
 loguru
