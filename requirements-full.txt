@@ -1,0 +1,37 @@
+# Sentinela - Dependências Completas (Opcional)
+# Requer ferramentas de compilação (Rust, C compiler)
+
+# Dependências base (sempre necessárias)
+-r requirements.txt
+
+# HTTP Client adicional
+aiohttp==3.9.1
+
+# Validação e Parsing
+email-validator==2.1.0
+
+# JSON rápido (requer Rust)
+# orjson==3.9.12
+
+# Cache Redis (opcional)
+redis==5.0.1
+# hiredis==2.3.2  # Requer C compiler
+
+# Scraping (para fontes sem API)
+beautifulsoup4==4.12.3
+# scrapy==2.11.0  # Requer compilação
+# lxml==5.1.0     # Requer C compiler
+
+# Logging
+loguru==0.7.2
+
+# Desenvolvimento
+pytest==7.4.3
+pytest-asyncio==0.23.3
+pytest-cov==4.1.0
+httpx-mock==0.12.0
+
+# Code Quality
+black==23.12.1
+ruff==0.1.11
+# mypy==1.8.0
