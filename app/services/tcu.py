@@ -27,7 +27,8 @@ class TCUService:
         data_inicio: Optional[date] = None,
         data_fim: Optional[date] = None,
         size: int = 10,
-        offset: int = 0
+        offset: int = 0,
+        **kwargs  # Aceita parâmetros extras (ex: exact_match)
     ) -> List[UnifiedResult]:
         """
         Busca acórdãos do TCU

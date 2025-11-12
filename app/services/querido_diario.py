@@ -29,7 +29,8 @@ class QueridoDiarioService:
         territory_ids: Optional[List[str]] = None,
         ufs: Optional[List[str]] = None,
         size: int = 10,
-        offset: int = 0
+        offset: int = 0,
+        **kwargs  # Aceita parâmetros extras (ex: exact_match)
     ) -> List[UnifiedResult]:
         """
         Busca diários municipais no Querido Diário

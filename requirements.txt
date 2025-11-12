@@ -1,19 +1,19 @@
 # Sentinela - Dependências Essenciais
 # Python 3.10+
-# Versão otimizada para Windows (sem compilação)
+# Versão otimizada para Windows (sem compilação) - sempre versões mais recentes
 
 # Framework Web
-fastapi==0.109.0
-uvicorn[standard]==0.27.0
-pydantic==2.5.3
-pydantic-settings==2.1.0
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
 
 # HTTP Client Assíncrono
-httpx==0.26.0
+httpx
 
 # Utilitários
-python-dotenv==1.0.0
-python-multipart==0.0.6
+python-dotenv
+python-multipart
 
 # Data/Time
-python-dateutil==2.8.2
+python-dateutil

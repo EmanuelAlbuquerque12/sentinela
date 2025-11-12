@@ -32,7 +32,8 @@ class DOUService:
         data_fim: Optional[date] = None,
         secao: Optional[str] = None,
         size: int = 10,
-        offset: int = 0
+        offset: int = 0,
+        **kwargs  # Aceita parâmetros extras (ex: exact_match)
     ) -> List[UnifiedResult]:
         """
         Busca no Diário Oficial da União
