@@ -12,6 +12,7 @@ from app.services.querido_diario import QueridoDiarioService
 from app.services.datajud import DataJudService
 from app.services.tcu import TCUService
 from app.services.dou import DOUService
+from app.services.inlabs import INLabsService
 
 
 class SearchAggregator:
@@ -27,6 +28,7 @@ class SearchAggregator:
         self.datajud = DataJudService()
         self.tcu = TCUService()
         self.dou = DOUService()
+        self.inlabs = INLabsService()
 
         # Mapear nomes de fontes para serviços
         self.sources = {
@@ -34,6 +36,7 @@ class SearchAggregator:
             "datajud": self.datajud,
             "tcu": self.tcu,
             "dou": self.dou,
+            "inlabs": self.inlabs,
         }
 
     async def search_all(self, request: SearchRequest) -> SearchResponse:

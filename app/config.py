@@ -28,7 +28,11 @@ class Settings(BaseSettings):
     port: int = 8000
 
     # APIs Externas - DataJud/CNJ
-    datajud_api_key: str = Field(default="", description="API Key do DataJud/CNJ")
+    # Chave pública - documentação em https://datajud-wiki.cnj.jus.br/api-publica/
+    datajud_api_key: str = Field(
+        default="cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==",
+        description="API Key pública do DataJud/CNJ"
+    )
     datajud_base_url: str = "https://api-publica.datajud.cnj.jus.br"
 
     # APIs Externas - Querido Diário
@@ -37,8 +41,19 @@ class Settings(BaseSettings):
     # APIs Externas - TCU
     tcu_base_url: str = "https://dados-abertos.apps.tcu.gov.br/api"
 
-    # APIs Externas - DOU
+    # APIs Externas - DOU (Dados Abertos - fallback)
     dou_dados_abertos_url: str = "http://dados.gov.br/dataset/diario-oficial-da-uniao"
+
+    # APIs Externas - INLabs (Imprensa Nacional - acesso completo ao DOU)
+    inlabs_username: str = Field(
+        default="emanuelcarlosalbuquerque@servidor.adv.br",
+        description="Email de login no INLabs"
+    )
+    inlabs_password: str = Field(
+        default="Aq1sw2$&@",
+        description="Senha do INLabs"
+    )
+    inlabs_base_url: str = "https://inlabs.in.gov.br"
 
     # Timeouts
     http_timeout: int = 30
@@ -97,7 +112,16 @@ class Settings(BaseSettings):
     @property
     def is_datajud_configured(self) -> bool:
         """Verifica se DataJud está configurado"""
-        return bool(self.datajud_api_key and self.datajud_api_key != "sua_chave_api_aqui")
+        return bool(self.datajud_api_key and len(self.datajud_api_key) > 10)
+
+    @property
+    def is_inlabs_configured(self) -> bool:
+        """Verifica se INLabs está configurado"""
+        return bool(
+            self.inlabs_username and
+            self.inlabs_password and
+            "@" in self.inlabs_username
+        )
 
 
 @lru_cache()
