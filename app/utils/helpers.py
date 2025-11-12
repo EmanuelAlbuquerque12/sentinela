@@ -310,13 +310,56 @@ def calculate_relevance_exact(query: str, text: str, exact_match: bool = False) 
 
 
 # Sistema de cache para diários
-_CACHE_DIR = Path(tempfile.gettempdir()) / "sentinela_cache"
+def _get_windows_temp_internet_files() -> Optional[Path]:
+    """
+    Retorna diretório Temporary Internet Files no Windows
+
+    Returns:
+        Path do diretório ou None se não estiver no Windows
+    """
+    import platform
+    import os
+
+    if platform.system() != "Windows":
+        return None
+
+    # Tentar localizar Temporary Internet Files
+    # Localização típica: %USERPROFILE%\AppData\Local\Microsoft\Windows\INetCache
+    userprofile = os.environ.get("USERPROFILE")
+    if userprofile:
+        inetcache = Path(userprofile) / "AppData" / "Local" / "Microsoft" / "Windows" / "INetCache" / "Sentinela"
+        if inetcache.parent.exists():
+            return inetcache
+
+        # Fallback: usar Temp do usuário
+        local_temp = Path(userprofile) / "AppData" / "Local" / "Temp" / "Sentinela"
+        if local_temp.parent.exists():
+            return local_temp
+
+    return None
 
 
 def get_cache_dir() -> Path:
-    """Retorna diretório de cache, criando se necessário"""
-    _CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    return _CACHE_DIR
+    """
+    Retorna diretório de cache, criando se necessário
+
+    Prioridade:
+    1. Windows: Temporary Internet Files / INetCache
+    2. Fallback: Diretório temporário do sistema
+
+    Returns:
+        Path do diretório de cache
+    """
+    # Tentar usar Temporary Internet Files no Windows
+    windows_cache = _get_windows_temp_internet_files()
+    if windows_cache:
+        windows_cache.mkdir(parents=True, exist_ok=True)
+        return windows_cache
+
+    # Fallback: diretório temporário padrão
+    cache_dir = Path(tempfile.gettempdir()) / "sentinela_cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir
 
 
 def cache_diario(

@@ -391,15 +391,43 @@ function displayPagination(paginacao) {
         </button>
     `;
 
-    // Page numbers (show max 5)
-    const startPage = Math.max(0, currentPageNum - 2);
-    const endPage = Math.min(totalPages, startPage + 5);
+    // Page numbers (show max 10 for easier navigation)
+    const maxPagesToShow = 10;
+    const halfRange = Math.floor(maxPagesToShow / 2);
+    let startPage = Math.max(0, currentPageNum - halfRange);
+    let endPage = Math.min(totalPages, startPage + maxPagesToShow);
 
+    // Adjust start if we're near the end
+    if (endPage - startPage < maxPagesToShow) {
+        startPage = Math.max(0, endPage - maxPagesToShow);
+    }
+
+    // Show first page and ellipsis if needed
+    if (startPage > 0) {
+        html += `
+            <button class="page-btn" onclick="goToPage(0)">1</button>
+        `;
+        if (startPage > 1) {
+            html += `<span class="page-ellipsis">...</span>`;
+        }
+    }
+
+    // Show page numbers
     for (let i = startPage; i < endPage; i++) {
         html += `
             <button class="page-btn ${i === currentPageNum ? 'active' : ''}" onclick="goToPage(${i})">
                 ${i + 1}
             </button>
+        `;
+    }
+
+    // Show ellipsis and last page if needed
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+            html += `<span class="page-ellipsis">...</span>`;
+        }
+        html += `
+            <button class="page-btn" onclick="goToPage(${totalPages - 1})">${totalPages}</button>
         `;
     }
 

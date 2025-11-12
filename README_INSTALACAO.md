@@ -120,12 +120,26 @@ Após instalação completa, você terá acesso a **9 fontes de dados**:
 | 3 | TCU | Federal | ❌ |
 | 4 | TCU Enhanced | Federal | ❌ |
 | 5 | TCU Acórdãos PDF | Federal | ✅ (INLabs) |
-| 6 | DOU | Federal | ❌ |
+| 6 | DOU (PDF Offline) | Federal | ✅ (INLabs) |
 | 7 | INLabs | Federal | ✅ (login) |
 | 8 | DOU Scrapy | Federal | ❌ |
 | 9 | DOU Dados Abertos | Federal | ❌ |
 
-**Nota:** Mesmo sem configurar credenciais, **7 de 9 fontes** funcionam imediatamente!
+**Nota:** Mesmo sem configurar credenciais, **6 de 9 fontes** funcionam imediatamente!
+
+### 🚀 Nova Funcionalidade: DOU com Busca Offline
+
+O serviço DOU agora implementa busca offline para maior estabilidade:
+1. **Baixa** o PDF do DOU via INLabs
+2. **Armazena** em cache no diretório temporário (Windows: Temporary Internet Files)
+3. **Extrai** texto do PDF usando PyMuPDF
+4. **Busca** nos arquivos locais (independente da conexão)
+
+**Vantagens:**
+- ✅ Estabilidade garantida após download
+- ✅ Cache de 72 horas (evita downloads repetidos)
+- ✅ Busca completa no texto do PDF
+- ✅ Funciona offline após o primeiro download
 
 ---
 
@@ -178,8 +192,11 @@ Após a instalação, você pode:
 
 - ✅ Fazer buscas unificadas em 9 fontes
 - ✅ Buscar acórdãos do TCU em PDFs
+- ✅ Buscar no DOU com método offline (estável)
 - ✅ Exportar resultados em DOCX
-- ✅ Usar paginação de 100 resultados
+- ✅ Usar paginação de 100 resultados por página
+- ✅ Navegar com páginas numeradas clicáveis (1, 2, 3... 10)
 - ✅ Aplicar filtros por estado, data, etc.
+- ✅ Cache automático em Temporary Internet Files (Windows)
 
 **Boas buscas!** 🚀

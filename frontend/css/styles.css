@@ -669,6 +669,12 @@ a:hover {
     cursor: not-allowed;
 }
 
+.page-ellipsis {
+    padding: 0.5rem 0.25rem;
+    color: var(--text-secondary);
+    user-select: none;
+}
+
 /* ==========================================
    Sources Grid
    ========================================== */
