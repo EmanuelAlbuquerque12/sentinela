@@ -47,7 +47,14 @@ Agregar e normalizar dados de múltiplas fontes oficiais brasileiras:
 - **Tipo**: Dados abertos mensais + API de pesquisa
 - **Funcionalidades**: Busca textual completa no DOU
 
-### 5. Projetos Open-Source Complementares
+### 5. INLabs (Imprensa Nacional)
+- **Cobertura**: Diário Oficial da União - acesso completo em XML/PDF
+- **Portal**: https://inlabs.in.gov.br
+- **Tipo**: Portal com autenticação (credenciais configuradas)
+- **Funcionalidades**: Download de edições completas, busca em XML, todas as seções
+- **Status**: ✅ Integrado com autenticação automática
+
+### 6. Projetos Open-Source Complementares
 - **Ro-DOU**: Scraper Apache Airflow para DOU
 - **scrapy-diario-oficial-da-uniao**: Spider Scrapy para DOU
 - **api_cnj**: Cliente Python para DataJud
@@ -55,27 +62,27 @@ Agregar e normalizar dados de múltiplas fontes oficiais brasileiras:
 ## 🏗️ Arquitetura Técnica
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    API REST (FastAPI)                    │
-│                  /search, /sources, /health              │
-└─────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                    API REST (FastAPI)                         │
+│                  /search, /sources, /health                   │
+└──────────────────────────────────────────────────────────────┘
                             │
-┌───────────────────────────┴───────────────────────────┐
-│              Aggregator Service (Async)                │
-│         Busca paralela em múltiplas fontes             │
-└─────────────────────────────────────────────────────────┘
+┌───────────────────────────┴────────────────────────────────┐
+│              Aggregator Service (Async)                     │
+│         Busca paralela em 5 fontes simultâneas              │
+└──────────────────────────────────────────────────────────────┘
                             │
-        ┌───────────────────┼───────────────────┐
-        │                   │                   │
-┌───────▼────────┐  ┌──────▼──────┐  ┌────────▼────────┐
-│ Querido Diário │  │  DataJud/CNJ│  │   TCU / DOU     │
-│   Integration  │  │ Integration │  │  Integration    │
-└────────────────┘  └─────────────┘  └─────────────────┘
-        │                   │                   │
-┌───────▼───────────────────▼───────────────────▼────────┐
-│               Data Normalizer (JSON)                    │
-│  {termo, fonte, data, órgão, snippet, url_original}    │
-└─────────────────────────────────────────────────────────┘
+        ┌───────────────────┼──────────────────┬──────────┐
+        │                   │                  │          │
+┌───────▼────────┐  ┌──────▼──────┐  ┌───────▼────┐  ┌─▼──────┐
+│ Querido Diário │  │  DataJud/CNJ│  │    TCU     │  │ INLabs │
+│   Integration  │  │ Integration │  │Integration │  │  DOU   │
+└────────────────┘  └─────────────┘  └────────────┘  └────────┘
+        │                   │                │             │
+┌───────▼───────────────────▼────────────────▼─────────────▼────┐
+│               Data Normalizer (JSON)                           │
+│  {termo, fonte, data, órgão, snippet, url_original}           │
+└────────────────────────────────────────────────────────────────┘
 ```
 
 ## 🔧 Tecnologias
@@ -138,15 +145,24 @@ uvicorn app.main:app --reload
 
 ## 🔑 Configuração de API Keys
 
-### DataJud/CNJ (Obrigatória)
-1. Acesse: https://www.cnj.jus.br/sistemas/datajud/api-publica/
-2. Solicite sua chave pública gratuita
-3. Adicione ao `.env`: `DATAJUD_API_KEY=sua_chave_aqui`
+### DataJud/CNJ (Chave Pública Pré-configurada)
+- ✅ **Status**: Chave pública já configurada no código
+- 📋 **Fonte**: https://datajud-wiki.cnj.jus.br/
+- 🔓 **Tipo**: Chave pública de demonstração (acesso básico)
+- Para acesso ampliado, solicite sua própria chave em: https://www.cnj.jus.br/sistemas/datajud/api-publica/
+
+### INLabs/Imprensa Nacional (Pré-configurado)
+- ✅ **Status**: Credenciais já configuradas no código
+- 🔐 **Portal**: https://inlabs.in.gov.br
+- 📥 **Funcionalidade**: Download completo de edições do DOU em XML/PDF
+- Para usar suas próprias credenciais, edite o arquivo `.env`:
+  - `INLABS_USERNAME=seu_email@example.com`
+  - `INLABS_PASSWORD=sua_senha`
 
 ### Outras APIs
 - **Querido Diário**: Sem autenticação necessária ✅
 - **TCU**: Sem autenticação necessária ✅
-- **DOU**: Dados abertos sem autenticação ✅
+- **DOU (Dados Abertos)**: Sem autenticação necessária ✅
 
 ## 🖥️ Interface Web
 
@@ -231,9 +247,10 @@ GET /api/v1/stats?query=licitacao
 | Fonte | Cobertura | Status API |
 |-------|-----------|------------|
 | Querido Diário | 600+ municípios | ✅ Funcionando |
-| DataJud/CNJ | Todos os tribunais | ✅ Funcionando (requer API Key) |
+| DataJud/CNJ | Todos os tribunais | ✅ Funcionando (chave pública pré-configurada) |
 | TCU | Acórdãos e deliberações | ✅ Funcionando |
-| DOU | Todas as seções | ⚠️ Dados abertos mensais |
+| DOU (Dados Abertos) | Todas as seções | ⚠️ Dados abertos mensais |
+| INLabs/DOU | DOU completo em XML/PDF | ✅ Funcionando (credenciais pré-configuradas) |
 | Tribunais individuais | Variável | ⚠️ Alguns disponíveis |
 
 ### ⚠️ Limitações Conhecidas
