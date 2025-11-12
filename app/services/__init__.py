@@ -6,6 +6,7 @@ from .datajud import DataJudService
 from .tcu import TCUService
 from .dou import DOUService
 from .inlabs import INLabsService
+from .dou_scrapy import DOUScrapyService
 from .aggregator import SearchAggregator
 
 __all__ = [
@@ -14,5 +15,6 @@ __all__ = [
     "TCUService",
     "DOUService",
     "INLabsService",
+    "DOUScrapyService",
     "SearchAggregator",
 ]
