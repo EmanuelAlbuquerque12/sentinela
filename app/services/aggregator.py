@@ -11,6 +11,7 @@ from app.models.schemas import SearchRequest, SearchResponse, UnifiedResult, Sou
 from app.services.querido_diario import QueridoDiarioService
 from app.services.datajud import DataJudService
 from app.services.tcu import TCUService
+from app.services.tcu_enhanced import TCUEnhancedService
 from app.services.dou import DOUService
 from app.services.inlabs import INLabsService
 from app.utils.helpers import parse_search_query
@@ -28,6 +29,7 @@ class SearchAggregator:
         self.querido_diario = QueridoDiarioService()
         self.datajud = DataJudService()
         self.tcu = TCUService()
+        self.tcu_enhanced = TCUEnhancedService()
         self.dou = DOUService()
         self.inlabs = INLabsService()
 
@@ -36,6 +38,7 @@ class SearchAggregator:
             "querido_diario": self.querido_diario,
             "datajud": self.datajud,
             "tcu": self.tcu,
+            "tcu_enhanced": self.tcu_enhanced,
             "dou": self.dou,
             "inlabs": self.inlabs,
         }
