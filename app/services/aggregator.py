@@ -12,6 +12,7 @@ from app.services.querido_diario import QueridoDiarioService
 from app.services.datajud import DataJudService
 from app.services.tcu import TCUService
 from app.services.tcu_enhanced import TCUEnhancedService
+from app.services.tcu_acordaos import TCUAcordaosService
 from app.services.dou import DOUService
 from app.services.inlabs import INLabsService
 from app.services.dou_scrapy import DOUScrapyService
@@ -32,6 +33,7 @@ class SearchAggregator:
         self.datajud = DataJudService()
         self.tcu = TCUService()
         self.tcu_enhanced = TCUEnhancedService()
+        self.tcu_acordaos = TCUAcordaosService()
         self.dou = DOUService()
         self.inlabs = INLabsService()
         self.dou_scrapy = DOUScrapyService()
@@ -43,6 +45,7 @@ class SearchAggregator:
             "datajud": self.datajud,
             "tcu": self.tcu,
             "tcu_enhanced": self.tcu_enhanced,
+            "tcu_acordaos": self.tcu_acordaos,
             "dou": self.dou,
             "inlabs": self.inlabs,
             "dou_scrapy": self.dou_scrapy,

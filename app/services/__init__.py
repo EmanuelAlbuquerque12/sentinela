@@ -5,6 +5,7 @@ from .querido_diario import QueridoDiarioService
 from .datajud import DataJudService
 from .tcu import TCUService
 from .tcu_enhanced import TCUEnhancedService
+from .tcu_acordaos import TCUAcordaosService
 from .dou import DOUService
 from .inlabs import INLabsService
 from .dou_scrapy import DOUScrapyService
@@ -16,6 +17,7 @@ __all__ = [
     "DataJudService",
     "TCUService",
     "TCUEnhancedService",
+    "TCUAcordaosService",
     "DOUService",
     "INLabsService",
     "DOUScrapyService",

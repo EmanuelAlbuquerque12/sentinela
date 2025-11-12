@@ -345,6 +345,133 @@ class INLabsService:
 
         return editions
 
+    async def login_cookie_based(self) -> Optional[str]:
+        """
+        Realiza login no portal INLabs usando método de cookie
+        (Baseado no código fornecido com form POST)
+
+        Returns:
+            Cookie de sessão ou None
+        """
+        if not self.username or not self.password:
+            raise Exception("Credenciais INLabs não configuradas")
+
+        login_url = f"{self.base_url}/logar.php"
+
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
+                # Login com form data
+                response = await client.post(
+                    login_url,
+                    data={
+                        "email": self.username,
+                        "password": self.password
+                    },
+                    headers={
+                        "Content-Type": "application/x-www-form-urlencoded",
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+                    }
+                )
+
+                if response.status_code == 200:
+                    # Obter cookie
+                    cookie = response.cookies.get("inlabs_session_cookie")
+                    if cookie:
+                        print(f"✓ Login INLabs bem-sucedido (cookie)")
+                        return cookie
+                    else:
+                        raise Exception("Cookie de sessão não encontrado")
+                else:
+                    raise Exception(f"Falha no login: {response.status_code}")
+
+        except Exception as e:
+            print(f"Erro ao fazer login cookie-based no INLabs: {e}")
+            return None
+
+    async def download_dou_pdf(
+        self,
+        data_publicacao: date,
+        secao: str = "do1",
+        use_cache: bool = True
+    ) -> Optional[bytes]:
+        """
+        Download do DOU em formato PDF com suporte a cache
+        (Baseado no código fornecido)
+
+        Args:
+            data_publicacao: Data da edição
+            secao: Seção do DOU (do1, do2, do3, do1e - Extra)
+            use_cache: Se True, tenta usar cache antes de baixar
+
+        Returns:
+            Conteúdo PDF em bytes ou None
+        """
+        # Tentar cache primeiro
+        if use_cache:
+            cached = get_cached_diario(
+                source=f"inlabs_pdf_{secao}",
+                data=datetime.combine(data_publicacao, datetime.min.time()),
+                max_age_hours=72  # Cache válido por 3 dias
+            )
+            if cached:
+                print(f"✓ Usando cache para DOU PDF {data_publicacao} seção {secao}")
+                content_b64 = cached.get("content")
+                if content_b64:
+                    import base64
+                    return base64.b64decode(content_b64)
+
+        # Login com cookie
+        cookie = await self.login_cookie_based()
+        if not cookie:
+            raise Exception("Falha ao obter cookie de sessão")
+
+        # Construir URL do PDF
+        ano = data_publicacao.year
+        mes = f"{data_publicacao.month:02d}"
+        dia = f"{data_publicacao.day:02d}"
+        data_completa = f"{ano}-{mes}-{dia}"
+
+        # Nome do arquivo conforme padrão do portal
+        filename = f"{ano}_{mes}_{dia}_ASSINADO_{secao}.pdf"
+        url_arquivo = f"{self.base_url}/index.php?p={data_completa}&dl={filename}"
+
+        try:
+            async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
+                response = await client.get(
+                    url_arquivo,
+                    headers={
+                        "Cookie": f"inlabs_session_cookie={cookie}",
+                        "origem": "736372697074"
+                    }
+                )
+
+                if response.status_code == 200:
+                    pdf_content = response.content
+                    print(f"✓ DOU PDF baixado: {len(pdf_content)} bytes")
+
+                    # Salvar em cache (em base64 para serialização JSON)
+                    if use_cache:
+                        import base64
+                        cache_diario(
+                            source=f"inlabs_pdf_{secao}",
+                            data=datetime.combine(data_publicacao, datetime.min.time()),
+                            content=base64.b64encode(pdf_content).decode('utf-8'),
+                            metadata={"secao": secao, "filename": filename}
+                        )
+                        print(f"✓ Cache PDF salvo para DOU {data_publicacao} seção {secao}")
+
+                    return pdf_content
+
+                elif response.status_code == 404:
+                    print(f"⚠️  Arquivo não encontrado: {filename}")
+                    return None
+                else:
+                    raise Exception(f"Erro ao baixar PDF: {response.status_code}")
+
+        except Exception as e:
+            print(f"Erro ao baixar DOU PDF: {e}")
+            return None
+
     async def health_check(self) -> Dict[str, Any]:
         """
         Verifica saúde do serviço INLabs
