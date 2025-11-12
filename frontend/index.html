@@ -55,7 +55,7 @@
                                 type="text"
                                 id="query-input"
                                 class="search-input"
-                                placeholder="Digite o que você procura... (ex: licitação, concurso, portaria)"
+                                placeholder="Digite o que você procura... Use aspas para busca exata: \"termo exato\""
                                 required
                                 autocomplete="off"
                             >
@@ -63,6 +63,13 @@
                                 <span class="btn-text">Buscar</span>
                                 <span class="btn-icon">🔍</span>
                             </button>
+                        </div>
+                        <div class="search-options">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="exact-match">
+                                <span>🎯 Busca exata (sem variações)</span>
+                            </label>
+                            <small class="hint">Ou use aspas no termo: "sua busca exata"</small>
                         </div>
 
                         <!-- Advanced Filters (Collapsible) -->
@@ -136,7 +143,11 @@
                                         </label>
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="fonte" value="dou">
-                                            <span>DOU (em desenvolvimento)</span>
+                                            <span>DOU (Dados Abertos)</span>
+                                        </label>
+                                        <label class="checkbox-label">
+                                            <input type="checkbox" name="fonte" value="inlabs" checked>
+                                            <span>INLabs (DOU Completo) ⭐</span>
                                         </label>
                                     </div>
                                 </div>

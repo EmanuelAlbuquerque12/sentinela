@@ -135,6 +135,12 @@ function getFiltersFromForm() {
     // Query
     filters.query = document.getElementById('query-input').value.trim();
 
+    // Exact match checkbox
+    const exactMatch = document.getElementById('exact-match').checked;
+    if (exactMatch) {
+        filters.exact_match = true;
+    }
+
     // Dates
     const dataInicio = document.getElementById('data-inicio').value;
     const dataFim = document.getElementById('data-fim').value;
@@ -153,7 +159,7 @@ function getFiltersFromForm() {
     // Sources (checkboxes)
     const selectedSources = Array.from(document.querySelectorAll('input[name="fonte"]:checked'))
         .map(cb => cb.value);
-    if (selectedSources.length > 0 && selectedSources.length < 4) {
+    if (selectedSources.length > 0 && selectedSources.length < 5) {  // Agora são 5 fontes (incluindo INLabs)
         filters.fontes = selectedSources.join(',');
     }
 
@@ -318,7 +324,7 @@ function createResultCard(result) {
             </div>
 
             <div class="result-snippet">
-                ${escapeHtml(result.snippet)}
+                ${result.snippet}
             </div>
 
             <div class="result-footer">

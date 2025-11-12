@@ -8,6 +8,13 @@ from typing import List, Optional, Dict, Any
 from app.config import get_settings
 from app.models.schemas import UnifiedResult
 from app.utils.normalizer import DataNormalizer
+from app.utils.helpers import (
+    cache_diario,
+    get_cached_diario,
+    matches_exact_query,
+    extract_snippet_with_highlight,
+    calculate_relevance_exact
+)
 import xml.etree.ElementTree as ET
 
 
@@ -67,18 +74,31 @@ class INLabsService:
     async def download_dou_xml(
         self,
         data_publicacao: date,
-        secao: str = "1"
+        secao: str = "1",
+        use_cache: bool = True
     ) -> Optional[str]:
         """
-        Download do DOU em formato XML
+        Download do DOU em formato XML com suporte a cache
 
         Args:
             data_publicacao: Data da edição
             secao: Seção do DOU (1, 2, 3, Extra)
+            use_cache: Se True, tenta usar cache antes de baixar
 
         Returns:
             Conteúdo XML ou None
         """
+        # Tentar cache primeiro
+        if use_cache:
+            cached = get_cached_diario(
+                source=f"inlabs_secao_{secao}",
+                data=datetime.combine(data_publicacao, datetime.min.time()),
+                max_age_hours=72  # Cache válido por 3 dias
+            )
+            if cached:
+                print(f"✓ Usando cache para DOU {data_publicacao} seção {secao}")
+                return cached.get("content")
+
         if not self.session:
             await self.login()
 
@@ -97,7 +117,20 @@ class INLabsService:
                 )
 
                 if response.status_code == 200:
-                    return response.text
+                    xml_content = response.text
+
+                    # Salvar em cache
+                    if use_cache:
+                        cache_diario(
+                            source=f"inlabs_secao_{secao}",
+                            data=datetime.combine(data_publicacao, datetime.min.time()),
+                            content=xml_content,
+                            metadata={"secao": secao}
+                        )
+                        print(f"✓ Cache salvo para DOU {data_publicacao} seção {secao}")
+
+                    return xml_content
+
                 elif response.status_code == 404:
                     return None  # Edição não disponível
                 else:
@@ -114,10 +147,12 @@ class INLabsService:
         data_fim: Optional[date] = None,
         secao: Optional[str] = None,
         size: int = 10,
-        offset: int = 0
+        offset: int = 0,
+        exact_match: bool = False,
+        **kwargs
     ) -> List[UnifiedResult]:
         """
-        Busca no DOU usando INLabs
+        Busca no DOU usando INLabs com cache
 
         Args:
             query: Termo de busca
@@ -126,6 +161,7 @@ class INLabsService:
             secao: Seção do DOU (1, 2, 3)
             size: Quantidade de resultados
             offset: Offset para paginação
+            exact_match: Se True, busca apenas matches exatos
 
         Returns:
             Lista de resultados normalizados
@@ -153,12 +189,18 @@ class INLabsService:
                 if len(results) >= size:
                     break
 
-                # Download do XML da edição
-                xml_content = await self.download_dou_xml(current_date, sec)
+                # Download do XML da edição (com cache)
+                xml_content = await self.download_dou_xml(current_date, sec, use_cache=True)
 
                 if xml_content:
                     # Parsear XML e buscar termo
-                    matches = self._search_in_xml(xml_content, query, current_date, sec)
+                    matches = self._search_in_xml(
+                        xml_content,
+                        query,
+                        current_date,
+                        sec,
+                        exact_match=exact_match
+                    )
                     results.extend(matches)
 
             # Próximo dia
@@ -173,22 +215,23 @@ class INLabsService:
         xml_content: str,
         query: str,
         data_publicacao: date,
-        secao: str
+        secao: str,
+        exact_match: bool = False
     ) -> List[UnifiedResult]:
         """
-        Busca termo no XML do DOU
+        Busca termo no XML do DOU com suporte a busca exata
 
         Args:
             xml_content: Conteúdo XML
             query: Termo de busca
             data_publicacao: Data da edição
             secao: Seção
+            exact_match: Se True, apenas matches exatos
 
         Returns:
             Lista de resultados encontrados
         """
         results = []
-        query_lower = query.lower()
 
         try:
             # Parsear XML
@@ -206,21 +249,56 @@ class INLabsService:
                 orgao_text = orgao.text if orgao is not None else "Órgão Federal"
 
                 # Verificar se termo está presente
-                texto_completo = f"{titulo_text} {conteudo_text}".lower()
+                texto_completo = f"{titulo_text} {conteudo_text}"
 
-                if query_lower in texto_completo:
-                    # Criar resultado normalizado
-                    result_data = {
-                        "data_publicacao": data_publicacao.isoformat(),
+                # Verificar match (exato ou flexível)
+                if exact_match:
+                    if not matches_exact_query(texto_completo, query):
+                        continue  # Pular se não há match exato
+                else:
+                    if not matches_exact_query(texto_completo, query):
+                        continue  # Mesmo busca flexível precisa ter o termo
+
+                # Extrair snippet com destaque
+                snippet = extract_snippet_with_highlight(
+                    text=conteudo_text or titulo_text,
+                    query=query,
+                    exact_match=exact_match,
+                    max_length=400,
+                    context_chars=200
+                )
+
+                # Calcular relevância
+                relevancia = calculate_relevance_exact(
+                    query=query,
+                    text=texto_completo,
+                    exact_match=exact_match
+                )
+
+                # Criar resultado normalizado
+                from app.utils.helpers import generate_hash_id
+                result_id = generate_hash_id("inlabs", data_publicacao.isoformat(), secao, titulo_text[:50])
+
+                result = UnifiedResult(
+                    id=result_id,
+                    termo_busca=query,
+                    fonte="INLabs/DOU",
+                    fonte_tipo="federal",
+                    orgao=orgao_text,
+                    orgao_uf=None,
+                    titulo=titulo_text or "Publicação DOU",
+                    data_publicacao=data_publicacao,
+                    snippet=snippet,
+                    url_original=f"https://www.in.gov.br/web/dou/-/{data_publicacao.strftime('%Y%m%d')}",
+                    relevancia=relevancia,
+                    metadados={
                         "secao": secao,
-                        "titulo": titulo_text,
-                        "orgao": orgao_text,
-                        "conteudo": conteudo_text,
-                        "url_certificacao": f"https://www.in.gov.br/web/dou/-/{data_publicacao.strftime('%Y%m%d')}"
+                        "data_download": datetime.now().isoformat(),
+                        "exact_match": exact_match
                     }
+                )
 
-                    normalized = self.normalizer.normalize_dou(result_data, query)
-                    results.append(normalized)
+                results.append(result)
 
         except ET.ParseError as e:
             print(f"Erro ao parsear XML: {e}")

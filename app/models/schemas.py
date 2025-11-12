@@ -25,17 +25,16 @@ class SortBy(str, Enum):
 
 class SearchRequest(BaseModel):
     """Request de busca unificada"""
-    query: str = Field(..., description="Termo de busca", min_length=1)
+    query: str = Field(..., description="Termo de busca (use aspas para busca exata: \"termo exato\")", min_length=1)
     data_inicio: Optional[date] = Field(None, description="Data inicial (YYYY-MM-DD)")
     data_fim: Optional[date] = Field(None, description="Data final (YYYY-MM-DD)")
     fontes: Optional[List[str]] = Field(
         None,
-        description="Lista de fontes específicas (querido_diario, datajud, tcu, dou)"
+        description="Lista de fontes específicas (querido_diario, datajud, tcu, dou, inlabs)"
     )
     ufs: Optional[List[str]] = Field(
         None,
-        description="Filtrar por UF (ex: ['SP', 'RJ'])",
-        max_length=2
+        description="Filtrar por múltiplas UFs (ex: ['SP', 'RJ', 'MG'])"
     )
     municipios: Optional[List[str]] = Field(
         None,
@@ -44,6 +43,10 @@ class SearchRequest(BaseModel):
     size: int = Field(10, description="Quantidade de resultados por página", ge=1, le=100)
     offset: int = Field(0, description="Offset para paginação", ge=0)
     sort_by: SortBy = Field(SortBy.RELEVANCE, description="Ordenação dos resultados")
+    exact_match: Optional[bool] = Field(
+        None,
+        description="Busca exata (detectado automaticamente se query estiver entre aspas)"
+    )
 
     @field_validator("query")
     @classmethod
@@ -53,6 +56,19 @@ class SearchRequest(BaseModel):
         if len(v) < 1:
             raise ValueError("Query não pode ser vazia")
         return v
+
+    @field_validator("ufs")
+    @classmethod
+    def validate_ufs(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        """Valida e normaliza lista de UFs"""
+        if not v:
+            return v
+        # Normalizar para maiúsculas e validar
+        normalized = [uf.upper().strip() for uf in v]
+        for uf in normalized:
+            if len(uf) != 2:
+                raise ValueError(f"UF inválida: {uf}. Use sigla de 2 letras (ex: SP, RJ)")
+        return normalized
 
     @field_validator("data_fim")
     @classmethod

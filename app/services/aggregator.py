@@ -13,6 +13,7 @@ from app.services.datajud import DataJudService
 from app.services.tcu import TCUService
 from app.services.dou import DOUService
 from app.services.inlabs import INLabsService
+from app.utils.helpers import parse_search_query
 
 
 class SearchAggregator:
@@ -50,6 +51,13 @@ class SearchAggregator:
             Resposta agregada com resultados normalizados de todas as fontes
         """
         start_time = time.time()
+
+        # Detectar busca exata automaticamente se não especificado
+        query_clean, is_exact = parse_search_query(request.query)
+        if request.exact_match is None:
+            request.exact_match = is_exact
+        # Atualizar query limpa (sem aspas)
+        request.query = query_clean
 
         # Determinar quais fontes consultar
         sources_to_query = request.fontes if request.fontes else list(self.sources.keys())
@@ -144,7 +152,8 @@ class SearchAggregator:
                 "data_inicio": request.data_inicio,
                 "data_fim": request.data_fim,
                 "size": request.size,
-                "offset": request.offset
+                "offset": request.offset,
+                "exact_match": request.exact_match or False
             }
 
             # Parâmetros específicos por fonte
@@ -158,6 +167,10 @@ class SearchAggregator:
                 if request.ufs:
                     tribunais = [f"tj{uf.lower()}" for uf in request.ufs]
                 params["tribunais"] = tribunais
+
+            elif source_name in ["dou", "inlabs"]:
+                # DOU e INLabs suportam busca exata nativa
+                params["exact_match"] = request.exact_match or False
 
             # Executar busca com timeout
             try:
