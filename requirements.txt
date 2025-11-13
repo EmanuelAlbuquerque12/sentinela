@@ -11,6 +11,9 @@ pydantic-settings
 # HTTP Client Assíncrono
 httpx
 
+# HTTP Client Síncrono (para compatibilidade com scripts originais)
+requests
+
 # Utilitários
 python-dotenv
 python-multipart

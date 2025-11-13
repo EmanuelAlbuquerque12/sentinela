@@ -9,6 +9,7 @@ import re
 from app.config import get_settings
 from app.models.schemas import UnifiedResult, SourceType
 from app.services.inlabs import INLabsService
+from app.services.inlabs_requests import INLabsRequestsService
 from app.services.dou_publico import DOUPublicoService
 from app.utils.pdf_helpers import extrair_texto_pdf
 from app.utils.helpers import (
@@ -33,8 +34,9 @@ class DOUService:
 
     def __init__(self):
         self.settings = get_settings()
-        self.publico = DOUPublicoService()  # Servidor público - prioridade
-        self.inlabs = INLabsService()  # Fallback com autenticação
+        self.publico = DOUPublicoService()  # 1. Servidor público - prioridade
+        self.inlabs = INLabsService()  # 2. INLabs httpx - fallback
+        self.inlabs_requests = INLabsRequestsService()  # 3. INLabs requests (como script original)
         self.timeout = 120
 
     async def search(
@@ -105,7 +107,7 @@ class DOUService:
                 except Exception as e:
                     print(f"   ⚠️  Servidor público falhou para {current_date} {sec}: {e}")
 
-                # FALLBACK 2: Tentar INLabs (COM autenticação)
+                # FALLBACK 2: Tentar INLabs httpx (COM autenticação)
                 if not pdf_content:
                     try:
                         pdf_content = await self.inlabs.download_dou_pdf(
@@ -117,10 +119,28 @@ class DOUService:
                         if pdf_content:
                             key = (current_date, sec)
                             pdfs_baixados[key] = pdf_content
-                            print(f"   ✓ {current_date} {sec}: {len(pdf_content)} bytes (INLabs)")
+                            print(f"   ✓ {current_date} {sec}: {len(pdf_content)} bytes (INLabs-httpx)")
+                            continue  # Sucesso, próximo
 
                     except Exception as e:
-                        print(f"   ⚠️  INLabs também falhou para {current_date} {sec}: {e}")
+                        print(f"   ⚠️  INLabs-httpx falhou: {e}")
+
+                # FALLBACK 3: INLabs requests (como script original que FUNCIONA)
+                if not pdf_content:
+                    try:
+                        pdf_content = await self.inlabs_requests.download_dou_pdf(
+                            data_publicacao=current_date,
+                            secao=sec,
+                            use_cache=True
+                        )
+
+                        if pdf_content:
+                            key = (current_date, sec)
+                            pdfs_baixados[key] = pdf_content
+                            print(f"   ✓ {current_date} {sec}: {len(pdf_content)} bytes (INLabs-requests)")
+
+                    except Exception as e:
+                        print(f"   ⚠️  Todos os métodos falharam para {current_date} {sec}")
 
             current_date += timedelta(days=1)
 
