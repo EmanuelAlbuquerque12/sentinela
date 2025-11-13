@@ -35,6 +35,13 @@ try:
 except ImportError:
     pass
 
+# Serviço público DOU (sem dependências especiais)
+try:
+    from .dou_publico import DOUPublicoService
+    __all__.append("DOUPublicoService")
+except ImportError:
+    pass
+
 # Serviços que requerem beautifulsoup4, lxml, pymupdf
 try:
     from .tcu_acordaos import TCUAcordaosService

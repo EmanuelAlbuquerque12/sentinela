@@ -9,6 +9,7 @@ import re
 from app.config import get_settings
 from app.models.schemas import UnifiedResult, SourceType
 from app.services.inlabs import INLabsService
+from app.services.dou_publico import DOUPublicoService
 from app.utils.pdf_helpers import extrair_texto_pdf
 from app.utils.helpers import (
     generate_hash_id,
@@ -20,18 +21,20 @@ from app.utils.helpers import (
 
 class DOUService:
     """
-    Integração com DOU usando abordagem offline:
-    1. Baixa PDF do DOU via INLabs
-    2. Armazena em cache no diretório temporário
-    3. Extrai texto do PDF usando PyMuPDF
-    4. Realiza busca no texto extraído
+    Integração com DOU usando abordagem offline com fallback:
+    1. Tenta servidor público (sem autenticação) - PRIORIDADE
+    2. Fallback para INLabs (com autenticação) se público falhar
+    3. Armazena em cache no diretório temporário
+    4. Extrai texto do PDF usando PyMuPDF
+    5. Realiza busca no texto extraído
 
     Esta abordagem garante estabilidade e independência da conexão.
     """
 
     def __init__(self):
         self.settings = get_settings()
-        self.inlabs = INLabsService()
+        self.publico = DOUPublicoService()  # Servidor público - prioridade
+        self.inlabs = INLabsService()  # Fallback com autenticação
         self.timeout = 120
 
     async def search(
@@ -83,20 +86,41 @@ class DOUService:
 
         while current_date <= data_fim:
             for sec in secoes:
+                pdf_content = None
+
                 try:
-                    pdf_content = await self.inlabs.download_dou_pdf(
+                    # PRIORIDADE 1: Tentar servidor público (SEM autenticação)
+                    pdf_content = await self.publico.download_dou_pdf(
                         data_publicacao=current_date,
                         secao=sec,
-                        use_cache=True  # Cache de 72 horas
+                        use_cache=True
                     )
 
                     if pdf_content:
                         key = (current_date, sec)
                         pdfs_baixados[key] = pdf_content
-                        print(f"   ✓ {current_date} {sec}: {len(pdf_content)} bytes")
+                        print(f"   ✓ {current_date} {sec}: {len(pdf_content)} bytes (público)")
+                        continue  # Sucesso, próximo
 
                 except Exception as e:
-                    print(f"   ⚠️  Erro ao baixar {current_date} {sec}: {e}")
+                    print(f"   ⚠️  Servidor público falhou para {current_date} {sec}: {e}")
+
+                # FALLBACK 2: Tentar INLabs (COM autenticação)
+                if not pdf_content:
+                    try:
+                        pdf_content = await self.inlabs.download_dou_pdf(
+                            data_publicacao=current_date,
+                            secao=sec,
+                            use_cache=True
+                        )
+
+                        if pdf_content:
+                            key = (current_date, sec)
+                            pdfs_baixados[key] = pdf_content
+                            print(f"   ✓ {current_date} {sec}: {len(pdf_content)} bytes (INLabs)")
+
+                    except Exception as e:
+                        print(f"   ⚠️  INLabs também falhou para {current_date} {sec}: {e}")
 
             current_date += timedelta(days=1)
 
