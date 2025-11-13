@@ -3,6 +3,7 @@ Serviço de integração com INLabs (Imprensa Nacional)
 Portal para download do Diário Oficial da União em XML e PDF
 """
 import httpx
+import asyncio
 from datetime import date, datetime
 from typing import List, Optional, Dict, Any
 from app.config import get_settings
@@ -37,6 +38,7 @@ class INLabsService:
         self.password = self.settings.inlabs_password
 
         self.session = None
+        self._cookie_cache = None  # Cache de cookie para reusar
 
     async def login(self) -> bool:
         """
@@ -345,63 +347,101 @@ class INLabsService:
 
         return editions
 
-    async def login_cookie_based(self) -> Optional[str]:
+    async def login_cookie_based(self, max_retries: int = 3) -> Optional[str]:
         """
-        Realiza login no portal INLabs usando método de cookie
+        Realiza login no portal INLabs usando método de cookie com retry
         (Baseado no código fornecido com form POST)
+
+        Args:
+            max_retries: Número máximo de tentativas
 
         Returns:
             Cookie de sessão ou None
         """
+        # Retornar cookie em cache se válido
+        if self._cookie_cache:
+            return self._cookie_cache
+
         if not self.username or not self.password:
-            raise Exception("Credenciais INLabs não configuradas")
-
-        login_url = f"{self.base_url}/logar.php"
-
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
-                # Login com form data
-                response = await client.post(
-                    login_url,
-                    data={
-                        "email": self.username,
-                        "password": self.password
-                    },
-                    headers={
-                        "Content-Type": "application/x-www-form-urlencoded",
-                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
-                    }
-                )
-
-                if response.status_code == 200:
-                    # Obter cookie
-                    cookie = response.cookies.get("inlabs_session_cookie")
-                    if cookie:
-                        print(f"✓ Login INLabs bem-sucedido (cookie)")
-                        return cookie
-                    else:
-                        raise Exception("Cookie de sessão não encontrado")
-                else:
-                    raise Exception(f"Falha no login: {response.status_code}")
-
-        except Exception as e:
-            print(f"Erro ao fazer login cookie-based no INLabs: {e}")
+            print("⚠️  Credenciais INLabs não configuradas")
             return None
+
+        # Tentar múltiplas URLs de login (pode variar)
+        login_urls = [
+            f"{self.base_url}/logar.php",
+            f"{self.base_url}/login.php",
+            f"{self.base_url}/api/login"
+        ]
+
+        for attempt in range(max_retries):
+            for login_url in login_urls:
+                try:
+                    async with httpx.AsyncClient(
+                        timeout=60,
+                        follow_redirects=True,
+                        verify=False  # Ignorar SSL para testes
+                    ) as client:
+                        # Tentar primeiro com form data
+                        response = await client.post(
+                            login_url,
+                            data={
+                                "email": self.username,
+                                "password": self.password
+                            },
+                            headers={
+                                "Content-Type": "application/x-www-form-urlencoded",
+                                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                                "origem": "736372697074"  # Header especial do script original
+                            }
+                        )
+
+                        if response.status_code == 200:
+                            # Tentar múltiplos nomes de cookie
+                            cookie_names = ["inlabs_session_cookie", "PHPSESSID", "session"]
+                            for cookie_name in cookie_names:
+                                cookie = response.cookies.get(cookie_name)
+                                if cookie:
+                                    print(f"✓ Login INLabs bem-sucedido (cookie: {cookie_name})")
+                                    self._cookie_cache = cookie
+                                    return cookie
+
+                            # Se não encontrou cookie mas status 200, usar cookies como string
+                            if response.cookies:
+                                cookie_str = "; ".join([f"{k}={v}" for k, v in response.cookies.items()])
+                                print(f"✓ Login INLabs - usando cookies: {list(response.cookies.keys())}")
+                                self._cookie_cache = cookie_str
+                                return cookie_str
+
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code == 502:
+                        print(f"⚠️  Servidor INLabs temporariamente indisponível (502) - tentativa {attempt + 1}/{max_retries}")
+                        await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                        continue
+                except Exception as e:
+                    if attempt == max_retries - 1:
+                        print(f"⚠️  Erro ao fazer login no INLabs: {e}")
+                    continue
+
+        print(f"❌ Falha ao fazer login no INLabs após {max_retries} tentativas")
+        return None
 
     async def download_dou_pdf(
         self,
         data_publicacao: date,
         secao: str = "do1",
-        use_cache: bool = True
+        use_cache: bool = True,
+        max_retries: int = 3
     ) -> Optional[bytes]:
         """
-        Download do DOU em formato PDF com suporte a cache
+        Download do DOU em formato PDF com suporte a cache e retry
         (Baseado no código fornecido)
 
         Args:
             data_publicacao: Data da edição
             secao: Seção do DOU (do1, do2, do3, do1e - Extra)
             use_cache: Se True, tenta usar cache antes de baixar
+            max_retries: Número máximo de tentativas
 
         Returns:
             Conteúdo PDF em bytes ou None
@@ -420,10 +460,12 @@ class INLabsService:
                     import base64
                     return base64.b64decode(content_b64)
 
-        # Login com cookie
-        cookie = await self.login_cookie_based()
+        # Tentar fazer login (com retry interno)
+        cookie = await self.login_cookie_based(max_retries=3)
+
+        # Se login falhou, tentar acesso sem autenticação (alguns PDFs podem estar públicos)
         if not cookie:
-            raise Exception("Falha ao obter cookie de sessão")
+            print(f"⚠️  Login falhou, tentando acesso sem autenticação para {data_publicacao}")
 
         # Construir URL do PDF
         ano = data_publicacao.year
@@ -431,46 +473,139 @@ class INLabsService:
         dia = f"{data_publicacao.day:02d}"
         data_completa = f"{ano}-{mes}-{dia}"
 
-        # Nome do arquivo conforme padrão do portal
-        filename = f"{ano}_{mes}_{dia}_ASSINADO_{secao}.pdf"
-        url_arquivo = f"{self.base_url}/index.php?p={data_completa}&dl={filename}"
+        # Tentar múltiplos formatos de URL e filename
+        url_patterns = [
+            # Padrão 1: URL com index.php
+            (f"{self.base_url}/index.php?p={data_completa}&dl={ano}_{mes}_{dia}_ASSINADO_{secao}.pdf",
+             f"{ano}_{mes}_{dia}_ASSINADO_{secao}.pdf"),
+            # Padrão 2: URL direta
+            (f"{self.base_url}/download/pdf/{ano}/{mes}/{dia}/{secao}.pdf",
+             f"{secao}.pdf"),
+            # Padrão 3: URL alternativa
+            (f"{self.base_url}/pdf/{ano}-{mes}-{dia}-{secao}.pdf",
+             f"{ano}-{mes}-{dia}-{secao}.pdf"),
+        ]
 
-        try:
-            async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
-                response = await client.get(
-                    url_arquivo,
-                    headers={
-                        "Cookie": f"inlabs_session_cookie={cookie}",
+        for attempt in range(max_retries):
+            for url_arquivo, filename in url_patterns:
+                try:
+                    headers = {
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
                         "origem": "736372697074"
                     }
-                )
 
-                if response.status_code == 200:
-                    pdf_content = response.content
-                    print(f"✓ DOU PDF baixado: {len(pdf_content)} bytes")
+                    if cookie:
+                        # Adicionar cookie aos headers
+                        if "=" in cookie:
+                            headers["Cookie"] = cookie
+                        else:
+                            headers["Cookie"] = f"inlabs_session_cookie={cookie}"
 
-                    # Salvar em cache (em base64 para serialização JSON)
-                    if use_cache:
-                        import base64
-                        cache_diario(
-                            source=f"inlabs_pdf_{secao}",
-                            data=datetime.combine(data_publicacao, datetime.min.time()),
-                            content=base64.b64encode(pdf_content).decode('utf-8'),
-                            metadata={"secao": secao, "filename": filename}
-                        )
-                        print(f"✓ Cache PDF salvo para DOU {data_publicacao} seção {secao}")
+                    async with httpx.AsyncClient(
+                        timeout=120,
+                        follow_redirects=True,
+                        verify=False
+                    ) as client:
+                        response = await client.get(url_arquivo, headers=headers)
 
-                    return pdf_content
+                        if response.status_code == 200:
+                            # Verificar se é realmente um PDF
+                            if len(response.content) > 1000 and response.content[:4] == b'%PDF':
+                                pdf_content = response.content
+                                print(f"✓ DOU PDF baixado: {len(pdf_content)} bytes ({filename})")
 
-                elif response.status_code == 404:
-                    print(f"⚠️  Arquivo não encontrado: {filename}")
-                    return None
-                else:
-                    raise Exception(f"Erro ao baixar PDF: {response.status_code}")
+                                # Salvar em cache (em base64 para serialização JSON)
+                                if use_cache:
+                                    import base64
+                                    cache_diario(
+                                        source=f"inlabs_pdf_{secao}",
+                                        data=datetime.combine(data_publicacao, datetime.min.time()),
+                                        content=base64.b64encode(pdf_content).decode('utf-8'),
+                                        metadata={"secao": secao, "filename": filename}
+                                    )
+                                    print(f"✓ Cache PDF salvo para DOU {data_publicacao} seção {secao}")
 
-        except Exception as e:
-            print(f"Erro ao baixar DOU PDF: {e}")
-            return None
+                                return pdf_content
+
+                        elif response.status_code == 404:
+                            # Arquivo não existe, tentar próximo padrão
+                            continue
+
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code == 502 and attempt < max_retries - 1:
+                        await asyncio.sleep(2 ** attempt)
+                        continue
+                except Exception as e:
+                    if attempt == max_retries - 1:
+                        print(f"⚠️  Erro ao baixar PDF {data_publicacao} {secao}: {e}")
+                    continue
+
+        # Se chegou aqui via INLabs, tentar fallback com servidor público
+        print(f"⚠️  INLabs falhou, tentando servidor público da Imprensa Nacional...")
+        return await self._download_dou_pdf_publico(data_publicacao, secao, use_cache)
+
+    async def _download_dou_pdf_publico(
+        self,
+        data_publicacao: date,
+        secao: str,
+        use_cache: bool = True
+    ) -> Optional[bytes]:
+        """
+        Fallback: Tenta baixar PDF do servidor público da Imprensa Nacional
+
+        Args:
+            data_publicacao: Data da edição
+            secao: Seção do DOU
+            use_cache: Se True, salva em cache
+
+        Returns:
+            Conteúdo PDF em bytes ou None
+        """
+        # URLs públicas da Imprensa Nacional
+        ano = data_publicacao.year
+        mes = f"{data_publicacao.month:02d}"
+        dia = f"{data_publicacao.day:02d}"
+
+        # Mapear secao para formato público
+        secao_map = {
+            "do1": "1",
+            "do2": "2",
+            "do3": "3",
+            "do1e": "1e"
+        }
+        secao_num = secao_map.get(secao, "1")
+
+        # URLs públicas conhecidas
+        public_urls = [
+            f"https://www.in.gov.br/leiturajornal?data={dia}/{mes}/{ano}&secao=dou{secao_num}",
+            f"https://pesquisa.in.gov.br/imprensa/jsp/visualiza/index.jsp?data={dia}/{mes}/{ano}&jornal={secao_num}",
+        ]
+
+        for url in public_urls:
+            try:
+                async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+                    response = await client.get(url)
+
+                    if response.status_code == 200:
+                        # Se é PDF
+                        if response.content[:4] == b'%PDF':
+                            print(f"✓ DOU PDF baixado do servidor público: {len(response.content)} bytes")
+
+                            if use_cache:
+                                import base64
+                                cache_diario(
+                                    source=f"inlabs_pdf_{secao}",
+                                    data=datetime.combine(data_publicacao, datetime.min.time()),
+                                    content=base64.b64encode(response.content).decode('utf-8'),
+                                    metadata={"secao": secao, "fonte": "publico"}
+                                )
+
+                            return response.content
+            except Exception as e:
+                continue
+
+        print(f"⚠️  Não foi possível baixar DOU PDF {data_publicacao} {secao} de nenhuma fonte")
+        return None
 
     async def health_check(self) -> Dict[str, Any]:
         """

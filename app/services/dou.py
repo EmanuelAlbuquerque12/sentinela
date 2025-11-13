@@ -67,10 +67,7 @@ class DOUService:
             data_inicio = data_fim - timedelta(days=7)
 
         print(f"🔍 Buscando no DOU: '{query}' ({data_inicio} a {data_fim})")
-        print(f"   Abordagem: Download PDF → Cache → Busca Offline")
-
-        all_results = []
-        current_date = data_inicio
+        print(f"   Abordagem: Download TODOS os PDFs → Cache → Busca Offline")
 
         # Definir seções a buscar
         secoes = []
@@ -79,44 +76,60 @@ class DOUService:
         else:
             secoes = ["do1", "do2", "do3"]  # Todas as seções
 
-        # Iterar sobre datas e seções
+        # PASSO 1: BAIXAR TODOS OS PDFs PRIMEIRO (como no script original)
+        print(f"📥 Fase 1: Baixando PDFs...")
+        pdfs_baixados = {}
+        current_date = data_inicio
+
         while current_date <= data_fim:
             for sec in secoes:
                 try:
-                    # PASSO 1: Baixar PDF (com cache automático)
                     pdf_content = await self.inlabs.download_dou_pdf(
                         data_publicacao=current_date,
                         secao=sec,
                         use_cache=True  # Cache de 72 horas
                     )
 
-                    if not pdf_content:
-                        continue
-
-                    # PASSO 2: Extrair texto do PDF
-                    texto_completo = extrair_texto_pdf(pdf_content)
-
-                    if not texto_completo:
-                        print(f"⚠️  PDF vazio ou não legível: {current_date} {sec}")
-                        continue
-
-                    # PASSO 3: Buscar termo no texto
-                    resultados_encontrados = self._buscar_no_texto(
-                        texto=texto_completo,
-                        query=query,
-                        data_publicacao=current_date,
-                        secao=sec,
-                        exact_match=exact_match
-                    )
-
-                    if resultados_encontrados:
-                        print(f"✓ {len(resultados_encontrados)} resultado(s) em {current_date} {sec}")
-                        all_results.extend(resultados_encontrados)
+                    if pdf_content:
+                        key = (current_date, sec)
+                        pdfs_baixados[key] = pdf_content
+                        print(f"   ✓ {current_date} {sec}: {len(pdf_content)} bytes")
 
                 except Exception as e:
-                    print(f"⚠️  Erro ao processar {current_date} {sec}: {e}")
+                    print(f"   ⚠️  Erro ao baixar {current_date} {sec}: {e}")
 
             current_date += timedelta(days=1)
+
+        print(f"📊 Total de PDFs baixados: {len(pdfs_baixados)}")
+
+        # PASSO 2: BUSCAR NOS PDFs BAIXADOS
+        print(f"🔎 Fase 2: Buscando termo '{query}' nos PDFs...")
+        all_results = []
+
+        for (data_pub, sec), pdf_content in pdfs_baixados.items():
+            try:
+                # Extrair texto do PDF
+                texto_completo = extrair_texto_pdf(pdf_content)
+
+                if not texto_completo:
+                    print(f"   ⚠️  PDF vazio ou não legível: {data_pub} {sec}")
+                    continue
+
+                # Buscar termo no texto
+                resultados_encontrados = self._buscar_no_texto(
+                    texto=texto_completo,
+                    query=query,
+                    data_publicacao=data_pub,
+                    secao=sec,
+                    exact_match=exact_match
+                )
+
+                if resultados_encontrados:
+                    print(f"   ✓ {len(resultados_encontrados)} resultado(s) em {data_pub} {sec}")
+                    all_results.extend(resultados_encontrados)
+
+            except Exception as e:
+                print(f"   ⚠️  Erro ao processar {data_pub} {sec}: {e}")
 
         print(f"📊 Total de resultados DOU: {len(all_results)}")
 

@@ -73,13 +73,14 @@ class TCUAcordaosService:
             data_inicio = data_fim - timedelta(days=7)
 
         print(f"🔍 Buscando acórdãos do TCU: '{query}' ({data_inicio} a {data_fim})")
+        print(f"   Abordagem: Download TODOS os PDFs → Extração → Busca")
 
-        all_acordaos = []
+        # PASSO 1: BAIXAR TODOS OS PDFs PRIMEIRO
+        print(f"📥 Fase 1: Baixando PDFs do DOU seção {secao}...")
+        pdfs_baixados = {}
         current_date = data_inicio
 
-        # Iterar sobre datas
         while current_date <= data_fim:
-            # Baixar PDF do DOU
             try:
                 pdf_content = await self.inlabs.download_dou_pdf(
                     data_publicacao=current_date,
@@ -88,30 +89,48 @@ class TCUAcordaosService:
                 )
 
                 if pdf_content:
-                    # Extrair texto do PDF
-                    texto = extrair_texto_pdf(pdf_content)
-
-                    # Procurar acórdãos
-                    acordaos_encontrados = encontrar_acordaos(texto, query)
-
-                    if acordaos_encontrados:
-                        print(f"✓ {len(acordaos_encontrados)} acórdão(s) encontrado(s) em {current_date}")
-
-                        # Normalizar resultados
-                        for ident, conteudo in acordaos_encontrados:
-                            result = self._normalizar_acordao(
-                                identificador=ident,
-                                conteudo=conteudo,
-                                data_publicacao=current_date,
-                                query=query,
-                                secao=secao
-                            )
-                            all_acordaos.append(result)
+                    pdfs_baixados[current_date] = pdf_content
+                    print(f"   ✓ {current_date}: {len(pdf_content)} bytes")
 
             except Exception as e:
-                print(f"⚠️  Erro ao processar {current_date}: {e}")
+                print(f"   ⚠️  Erro ao baixar {current_date}: {e}")
 
             current_date += timedelta(days=1)
+
+        print(f"📊 Total de PDFs baixados: {len(pdfs_baixados)}")
+
+        # PASSO 2: BUSCAR ACÓRDÃOS NOS PDFs BAIXADOS
+        print(f"🔎 Fase 2: Buscando acórdãos com termo '{query}'...")
+        all_acordaos = []
+
+        for data_pub, pdf_content in pdfs_baixados.items():
+            try:
+                # Extrair texto do PDF
+                texto = extrair_texto_pdf(pdf_content)
+
+                if not texto:
+                    print(f"   ⚠️  PDF vazio: {data_pub}")
+                    continue
+
+                # Procurar acórdãos
+                acordaos_encontrados = encontrar_acordaos(texto, query)
+
+                if acordaos_encontrados:
+                    print(f"   ✓ {len(acordaos_encontrados)} acórdão(s) em {data_pub}")
+
+                    # Normalizar resultados
+                    for ident, conteudo in acordaos_encontrados:
+                        result = self._normalizar_acordao(
+                            identificador=ident,
+                            conteudo=conteudo,
+                            data_publicacao=data_pub,
+                            query=query,
+                            secao=secao
+                        )
+                        all_acordaos.append(result)
+
+            except Exception as e:
+                print(f"   ⚠️  Erro ao processar {data_pub}: {e}")
 
         print(f"📊 Total de acórdãos encontrados: {len(all_acordaos)}")
 
