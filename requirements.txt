@@ -17,3 +17,9 @@ python-multipart
 
 # Data/Time
 python-dateutil
+
+# Scraping e PDF (necessários para DOU e TCU Acórdãos)
+beautifulsoup4
+lxml
+pymupdf
+unidecode
